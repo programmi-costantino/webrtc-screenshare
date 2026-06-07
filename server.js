@@ -36,7 +36,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = 3000;
+const PORT = 3030;
 http.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
