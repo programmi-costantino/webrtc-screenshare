@@ -396,7 +396,7 @@
                 setTheme(currentTheme === 'dark' ? 'light' : 'dark');
             });
 
-            // --- WEBRTC AND UI LOGIC ---
+            // --- WEBRTC AND UI LOGIC (MULTI-USER) ---
             const socket = io();
             const roomInput = document.getElementById('roomCode');
             const audioToggle = document.getElementById('audioToggle');
@@ -412,7 +412,8 @@
             const localVideoBox = document.getElementById('localVideoBox');
             const remoteVideoBox = document.getElementById('remoteVideoBox');
 
-            let peerConnection;
+            // Dictionary to manage multiple connections simultaneously
+            const peerConnections = {};
             let localStream;
             let currentRoom = "";
             let isSharer = false;
@@ -423,15 +424,23 @@
                 }]
             };
 
-            function createPeerConnection() {
-                peerConnection = new RTCPeerConnection(config);
-                peerConnection.onicecandidate = event => {
-                    if (event.candidate) socket.emit('candidate', currentRoom, event.candidate);
+            // Function to create a dedicated connection for a single viewer
+            function createPeerConnection(targetId) {
+                const pc = new RTCPeerConnection(config);
+                peerConnections[targetId] = pc;
+
+                pc.onicecandidate = event => {
+                    if (event.candidate) {
+                        socket.emit('candidate', targetId, event.candidate);
+                    }
                 };
-                peerConnection.ontrack = event => {
+
+                pc.ontrack = event => {
                     remoteVideoBox.style.display = "flex";
                     remoteVideo.srcObject = event.streams[0];
                 };
+
+                return pc;
             }
 
             function stopSharingUI() {
@@ -445,9 +454,10 @@
                 roomInput.disabled = false;
                 audioToggle.disabled = false;
 
-                if (peerConnection) {
-                    peerConnection.close();
-                    peerConnection = null;
+                // Close all active WebRTC connections to viewers
+                for (let id in peerConnections) {
+                    peerConnections[id].close();
+                    delete peerConnections[id];
                 }
             }
 
@@ -490,12 +500,14 @@
                     const newVideoTrack = newStream.getVideoTracks()[0];
                     newVideoTrack.onended = stopSharingUI;
 
-                    if (peerConnection) {
-                        const videoSender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                    // Apply the new video stream to all open connections
+                    for (let id in peerConnections) {
+                        const pc = peerConnections[id];
+                        const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
                         if (videoSender) await videoSender.replaceTrack(newVideoTrack);
 
                         const newAudioTrack = newStream.getAudioTracks()[0];
-                        const audioSender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                        const audioSender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
                         if (audioSender && newAudioTrack) await audioSender.replaceTrack(newAudioTrack);
                     }
 
@@ -522,32 +534,45 @@
                 socket.emit('join-room', currentRoom);
             });
 
-            socket.on('peer-joined', async () => {
+            // --- SOCKET EVENTS FOR TARGETED FORWARDING ---
+
+            socket.on('peer-joined', async (viewerId) => {
                 if (isSharer && localStream) {
-                    createPeerConnection();
-                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    socket.emit('offer', currentRoom, peerConnection.localDescription);
+                    const pc = createPeerConnection(viewerId);
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    socket.emit('offer', viewerId, pc.localDescription);
                 }
             });
 
-            socket.on('offer', async (description) => {
+            socket.on('offer', async (hostId, description) => {
                 if (!isSharer) {
-                    createPeerConnection();
-                    await peerConnection.setRemoteDescription(description);
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    socket.emit('answer', currentRoom, peerConnection.localDescription);
+                    const pc = createPeerConnection(hostId);
+                    await pc.setRemoteDescription(description);
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    socket.emit('answer', hostId, pc.localDescription);
                 }
             });
 
-            socket.on('answer', (description) => {
-                if (isSharer && peerConnection) peerConnection.setRemoteDescription(description);
+            socket.on('answer', (viewerId, description) => {
+                if (isSharer && peerConnections[viewerId]) {
+                    peerConnections[viewerId].setRemoteDescription(description);
+                }
             });
 
-            socket.on('candidate', (candidate) => {
-                if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            socket.on('candidate', (peerId, candidate) => {
+                if (peerConnections[peerId]) {
+                    peerConnections[peerId].addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            });
+
+            socket.on('peer-left', (peerId) => {
+                if (peerConnections[peerId]) {
+                    peerConnections[peerId].close();
+                    delete peerConnections[peerId];
+                }
             });
 
             // --- URL PARAMETERS MANAGEMENT ---
