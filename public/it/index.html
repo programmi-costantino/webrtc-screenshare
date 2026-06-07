@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="light">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Condivisione Schermo Avanzata</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📹</text></svg>">
+        <script src="/socket.io/socket.io.js"></script>
+        <style>
+            /* Variabili per il Tema (Stile Moderno) */
+            :root {
+                --bg-body: #f3f4f6;
+                --bg-card: #ffffff;
+                --text-main: #111827;
+                --text-muted: #6b7280;
+                --border-color: #e5e7eb;
+                --input-bg: #f9fafb;
+
+                --color-primary: #3b82f6;
+                --color-primary-hover: #2563eb;
+                --color-success: #10b981;
+                --color-success-hover: #059669;
+                --color-danger: #ef4444;
+                --color-danger-hover: #dc2626;
+                --color-warning: #f59e0b;
+                --color-warning-hover: #d97706;
+            }
+
+            [data-theme="dark"] {
+                --bg-body: #111827;
+                --bg-card: #1f2937;
+                --text-main: #f9fafb;
+                --text-muted: #9ca3af;
+                --border-color: #374151;
+                --input-bg: #111827;
+            }
+
+            /* Reset e Base */
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                background-color: var(--bg-body);
+                color: var(--text-main);
+                margin: 0;
+                padding: 20px;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                transition: background-color 0.3s ease, color 0.3s ease;
+            }
+
+            h1 {
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+                text-align: center;
+            }
+
+            .subtitle {
+                color: var(--text-muted);
+                margin-bottom: 2rem;
+                text-align: center;
+            }
+
+            /* Header e Tema */
+            .header-container {
+                width: 100%;
+                max-width: 900px;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .theme-toggle {
+                position: absolute;
+                top: 0;
+                right: 0;
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                color: var(--text-main);
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.2rem;
+                cursor: pointer;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+                transition: all 0.2s ease;
+            }
+
+            .theme-toggle:hover {
+                transform: scale(1.1);
+            }
+
+            /* Card Controlli */
+            .control-card {
+                background-color: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                padding: 24px;
+                width: 100%;
+                max-width: 600px;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                margin-bottom: 30px;
+                transition: background-color 0.3s ease, border-color 0.3s ease;
+            }
+
+            .input-group {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+
+            input[type="text"] {
+                width: 100%;
+                padding: 12px 16px;
+                font-size: 1rem;
+                background-color: var(--input-bg);
+                border: 1px solid var(--border-color);
+                color: var(--text-main);
+                border-radius: 8px;
+                outline: none;
+                transition: border-color 0.2s ease;
+            }
+
+            input[type="text"]:focus {
+                border-color: var(--color-primary);
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            }
+
+            .checkbox-wrapper {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                font-size: 0.95rem;
+            }
+
+            /* Pulsanti */
+            .btn-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            @media (max-width: 480px) {
+                .btn-group {
+                    grid-template-columns: 1fr;
+                }
+
+                .theme-toggle {
+                    position: static;
+                    margin-bottom: 20px;
+                    align-self: flex-end;
+                }
+            }
+
+            button.action-btn {
+                padding: 12px 20px;
+                font-size: 1rem;
+                font-weight: 600;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                cursor: pointer;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            button.action-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none !important;
+                box-shadow: none;
+            }
+
+            button.action-btn:active:not(:disabled) {
+                transform: scale(0.98);
+            }
+
+            #shareBtn {
+                background-color: var(--color-success);
+            }
+
+            #shareBtn:hover:not(:disabled) {
+                background-color: var(--color-success-hover);
+            }
+
+            #viewBtn {
+                background-color: var(--color-primary);
+            }
+
+            #viewBtn:hover:not(:disabled) {
+                background-color: var(--color-primary-hover);
+            }
+
+            .active-controls {
+                display: none;
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid var(--border-color);
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            #changeBtn {
+                background-color: var(--color-warning);
+            }
+
+            #changeBtn:hover:not(:disabled) {
+                background-color: var(--color-warning-hover);
+            }
+
+            #stopBtn {
+                background-color: var(--color-danger);
+            }
+
+            #stopBtn:hover:not(:disabled) {
+                background-color: var(--color-danger-hover);
+            }
+
+            /* Area Video */
+            .videos-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 24px;
+                width: 100%;
+                max-width: 1200px;
+                justify-content: center;
+            }
+
+            .video-box {
+                flex: 1 1 400px;
+                display: none;
+                flex-direction: column;
+                background-color: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                padding: 16px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            .video-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+
+            .video-title {
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .fullscreen-btn {
+                background: none;
+                border: none;
+                color: var(--text-main);
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 4px;
+                line-height: 1;
+                border-radius: 6px;
+                transition: background-color 0.2s, transform 0.2s;
+            }
+
+            .fullscreen-btn:hover {
+                background-color: var(--border-color);
+                transform: scale(1.05);
+            }
+
+            .status-dot {
+                width: 10px;
+                height: 10px;
+                background-color: var(--color-success);
+                border-radius: 50%;
+                display: inline-block;
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+                }
+
+                70% {
+                    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+                }
+
+                100% {
+                    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+                }
+            }
+
+            video {
+                width: 100%;
+                border-radius: 8px;
+                background-color: #000;
+                aspect-ratio: 16/9;
+                object-fit: contain;
+            }
+        </style>
+    </head>
+    <body>
+
+        <div class="header-container">
+            <button id="themeToggle" class="theme-toggle" title="Cambia Tema">☀️</button>
+            <h1>Condivisione Schermo</h1>
+            <div class="subtitle">Connessione sicura Peer-to-Peer</div>
+        </div>
+
+        <div class="control-card">
+            <div class="input-group">
+                <input type="text" id="roomCode" placeholder="Inserisci il Codice Stanza (es. riunione-123)">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" id="audioToggle"> Condividi anche l'audio di sistema
+                </label>
+            </div>
+
+            <div class="btn-group">
+                <button id="shareBtn" class="action-btn">Condividi Schermo</button>
+                <button id="viewBtn" class="action-btn">Guarda Schermo</button>
+            </div>
+
+            <div class="active-controls" id="activeControls">
+                <button id="changeBtn" class="action-btn">Cambia Finestra</button>
+                <button id="stopBtn" class="action-btn">Interrompi</button>
+            </div>
+        </div>
+
+        <div class="videos-container">
+            <div class="video-box" id="localVideoBox">
+                <div class="video-header">
+                    <div class="video-title"><span class="status-dot"></span> Il Tuo Schermo</div>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('localVideo')" title="Schermo Intero">⛶</button>
+                </div>
+                <video id="localVideo" autoplay playsinline muted></video>
+            </div>
+
+            <div class="video-box" id="remoteVideoBox">
+                <div class="video-header">
+                    <div class="video-title"><span class="status-dot"></span> In Ricezione</div>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('remoteVideo')" title="Schermo Intero">⛶</button>
+                </div>
+                <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+        </div>
+
+        <script>
+            // --- GESTIONE SCHERMO INTERO ---
+            function toggleFullscreen(videoId) {
+                const videoElement = document.getElementById(videoId);
+                if (!document.fullscreenElement) {
+                    if (videoElement.requestFullscreen) {
+                        videoElement.requestFullscreen();
+                    } else if (videoElement.webkitRequestFullscreen) {
+                        videoElement.webkitRequestFullscreen();
+                    } else if (videoElement.msRequestFullscreen) {
+                        videoElement.msRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            }
+
+            // --- GESTIONE TEMA (Light/Dark Mode) ---
+            const themeToggle = document.getElementById('themeToggle');
+            const html = document.documentElement;
+
+            function setTheme(theme) {
+                html.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+            }
+
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
+
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = html.getAttribute('data-theme');
+                setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+            });
+
+            // --- LOGICA WEBRTC E UI ---
+            const socket = io();
+            const roomInput = document.getElementById('roomCode');
+            const audioToggle = document.getElementById('audioToggle');
+
+            const shareBtn = document.getElementById('shareBtn');
+            const viewBtn = document.getElementById('viewBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const changeBtn = document.getElementById('changeBtn');
+            const activeControls = document.getElementById('activeControls');
+
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            const localVideoBox = document.getElementById('localVideoBox');
+            const remoteVideoBox = document.getElementById('remoteVideoBox');
+
+            let peerConnection;
+            let localStream;
+            let currentRoom = "";
+            let isSharer = false;
+
+            const config = {
+                'iceServers': [{
+                    'urls': 'stun:stun.l.google.com:19302'
+                }]
+            };
+
+            function createPeerConnection() {
+                peerConnection = new RTCPeerConnection(config);
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) socket.emit('candidate', currentRoom, event.candidate);
+                };
+                peerConnection.ontrack = event => {
+                    remoteVideoBox.style.display = "flex";
+                    remoteVideo.srcObject = event.streams[0];
+                };
+            }
+
+            function stopSharingUI() {
+                if (localStream) localStream.getTracks().forEach(track => track.stop());
+                localVideo.srcObject = null;
+                localVideoBox.style.display = "none";
+                activeControls.style.display = "none";
+
+                shareBtn.disabled = false;
+                viewBtn.disabled = false;
+                roomInput.disabled = false;
+                audioToggle.disabled = false;
+
+                if (peerConnection) {
+                    peerConnection.close();
+                    peerConnection = null;
+                }
+            }
+
+            shareBtn.addEventListener('click', async () => {
+                const code = roomInput.value.trim();
+                if (!code) return alert("Inserisci un codice per la stanza!");
+
+                try {
+                    const withAudio = audioToggle.checked;
+                    localStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: true,
+                        audio: withAudio
+                    });
+                    localStream.getVideoTracks()[0].onended = stopSharingUI;
+
+                    localVideo.srcObject = localStream;
+                    localVideoBox.style.display = "flex";
+                    activeControls.style.display = "grid";
+
+                    shareBtn.disabled = true;
+                    viewBtn.disabled = true;
+                    roomInput.disabled = true;
+                    audioToggle.disabled = true;
+
+                    currentRoom = code;
+                    isSharer = true;
+                    socket.emit('join-room', currentRoom);
+                } catch (e) {
+                    console.error("Errore acquisizione schermo:", e);
+                }
+            });
+
+            changeBtn.addEventListener('click', async () => {
+                try {
+                    const withAudio = audioToggle.checked;
+                    const newStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: true,
+                        audio: withAudio
+                    });
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    newVideoTrack.onended = stopSharingUI;
+
+                    if (peerConnection) {
+                        const videoSender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (videoSender) await videoSender.replaceTrack(newVideoTrack);
+
+                        const newAudioTrack = newStream.getAudioTracks()[0];
+                        const audioSender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                        if (audioSender && newAudioTrack) await audioSender.replaceTrack(newAudioTrack);
+                    }
+
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = newStream;
+                    localVideo.srcObject = localStream;
+                } catch (e) {
+                    console.log("Cambio finestra annullato.");
+                }
+            });
+
+            stopBtn.addEventListener('click', stopSharingUI);
+
+            viewBtn.addEventListener('click', () => {
+                const code = roomInput.value.trim();
+                if (!code) return alert("Inserisci il codice della stanza da guardare!");
+
+                currentRoom = code;
+                isSharer = false;
+                shareBtn.disabled = true;
+                viewBtn.disabled = true;
+                roomInput.disabled = true;
+                audioToggle.disabled = true;
+                socket.emit('join-room', currentRoom);
+            });
+
+            socket.on('peer-joined', async () => {
+                if (isSharer && localStream) {
+                    createPeerConnection();
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('offer', currentRoom, peerConnection.localDescription);
+                }
+            });
+
+            socket.on('offer', async (description) => {
+                if (!isSharer) {
+                    createPeerConnection();
+                    await peerConnection.setRemoteDescription(description);
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    socket.emit('answer', currentRoom, peerConnection.localDescription);
+                }
+            });
+
+            socket.on('answer', (description) => {
+                if (isSharer && peerConnection) peerConnection.setRemoteDescription(description);
+            });
+
+            socket.on('candidate', (candidate) => {
+                if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            });
+
+            // --- GESTIONE DEI PARAMETRI URL (Novità) ---
+            window.addEventListener('DOMContentLoaded', () => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const codeParam = urlParams.get('code');
+                const watchParam = urlParams.get('watch');
+
+                if (codeParam) {
+                    // Inserisce automaticamente il codice nel campo
+                    roomInput.value = codeParam;
+
+                    // Se watch è true, simula il click sul pulsante "Guarda Schermo"
+                    if (watchParam === 'true') {
+                        viewBtn.click();
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>
