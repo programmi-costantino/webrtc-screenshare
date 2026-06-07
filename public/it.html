@@ -4,6 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Condivisione Schermo Avanzata</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📹</text></svg>">
         <script src="/socket.io/socket.io.js"></script>
         <style>
             /* Variabili per il Tema (Stile Moderno) */
@@ -365,10 +366,8 @@
                     if (videoElement.requestFullscreen) {
                         videoElement.requestFullscreen();
                     } else if (videoElement.webkitRequestFullscreen) {
-                        /* Safari */
                         videoElement.webkitRequestFullscreen();
                     } else if (videoElement.msRequestFullscreen) {
-                        /* IE11 */
                         videoElement.msRequestFullscreen();
                     }
                 } else {
@@ -549,6 +548,23 @@
 
             socket.on('candidate', (candidate) => {
                 if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            });
+
+            // --- GESTIONE DEI PARAMETRI URL (Novità) ---
+            window.addEventListener('DOMContentLoaded', () => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const codeParam = urlParams.get('code');
+                const watchParam = urlParams.get('watch');
+
+                if (codeParam) {
+                    // Inserisce automaticamente il codice nel campo
+                    roomInput.value = codeParam;
+
+                    // Se watch è true, simula il click sul pulsante "Guarda Schermo"
+                    if (watchParam === 'true') {
+                        viewBtn.click();
+                    }
+                }
             });
         </script>
     </body>
